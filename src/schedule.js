@@ -3,12 +3,12 @@
 export const START = {day: 'Saturday', hour: 14, minute: 0};
 // [setup minutes, play minutes] by game name; unknown games fall back to DEFAULT.
 const TIMING = {
-  'Arms, Shuff & Pool': [10, 45], // three stations at once, up to three rounds
+  'Arms, Shuff & Pool': [10, 40], // three stations at once, up to three rounds
   "King's Cup": [10, 25],
   'Bodies': [10, 30],
   'Betrayal': [5, 10],
-  'Boom Cup': [10, 15],
-  'Beerio Kart': [15, 40],
+  'Boom Cup': [5, 15],
+  'Beerio Kart': [10, 25], // one full tournament
   'Beer Pong': [10, 20],
 };
 const DEFAULT = [10, 20];
@@ -17,7 +17,7 @@ const clock = m => { const h = Math.floor(m / 60) % 24; return `${h % 12 || 12}:
 export function buildSchedule(events) {
   let t = START.hour * 60 + START.minute;
   const rows = [], add = (name, minutes, detail, kind) => { rows.push({time: clock(t), name, minutes, detail, kind}); t += minutes };
-  add('Arrive, pick teams, grab a drink', 30, 'Team colors and a quick run-through of the rules', 'extra');
+  add('Arrive, pick teams, grab a drink', 20, 'Team colors and a quick run-through of the rules', 'extra');
   events.forEach(e => {
     const [setup, play] = TIMING[e.name] || DEFAULT;
     add(e.name, setup + play, `${setup} min setup · ${play} min play`, 'game');

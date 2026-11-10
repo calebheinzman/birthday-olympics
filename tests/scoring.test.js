@@ -139,11 +139,11 @@ test('Betrayal ties never pay out more than a ranked event', async () => {
  const max=rankedPoints(6).reduce((x,y)=>x+y);
  for (const v of [[5,5,5,0,0,0],[2,2,2,2,2,2],[5,0,2,2,5,0],[5,2,2,0,5,2]]) {const a=tallyAwards(v);assert.ok(v.reduce((n,x)=>n+(x===0?0:a[x]),0)<=max)}
 });
-test('schedule starts at 2 PM and runs the games back to back', async () => {
+test('schedule starts at 2 PM and the current lineup ends at 5:30 PM', async () => {
  const {buildSchedule} = await import('../src/schedule.js');
- const rows = buildSchedule(['Arms, Shuff & Pool',"King's Cup",'Bodies','Betrayal','Boom Cup','Beerio Kart','Beer Pong'].map(name=>({name})));
- assert.equal(rows[0].time,'2:00 PM'); assert.equal(rows[1].name,'Arms, Shuff & Pool'); assert.equal(rows[1].time,'2:30 PM'); assert.equal(rows[2].time,'3:25 PM');
- assert.equal(rows.at(-2).name,'Beer Pong'); assert.equal(rows.length,9); assert.ok(!rows.some(r=>/break/i.test(r.name)));
+ const rows = buildSchedule(['Arms, Shuff & Pool','Bodies','Betrayal','Boom Cup','Beerio Kart','Beer Pong'].map(name=>({name})));
+ assert.equal(rows[0].time,'2:00 PM'); assert.equal(rows[1].name,'Arms, Shuff & Pool'); assert.equal(rows[1].time,'2:20 PM');
+ assert.equal(rows.at(-2).name,'Beer Pong'); assert.equal(rows.at(-1).time,'5:30 PM'); assert.ok(!rows.some(r=>/break/i.test(r.name)));
 });
 test('matchup editor renders a draft and applies winner taps', async () => {
  const m = await import('../src/matchups.js');
