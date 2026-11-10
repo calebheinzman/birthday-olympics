@@ -98,3 +98,4 @@ input,select,textarea{background:#fffcf5;border-color:#c9c3ac}button{min-height:
 .vote-turnout{border-top:1px solid var(--line);padding-top:14px;margin-top:4px}
 .vote-turnout h3,.vote-history h3{font-size:13px;margin:14px 0 8px}
 .vote-history p{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.manage-actions{display:flex;gap:8px;flex-shrink:0}
