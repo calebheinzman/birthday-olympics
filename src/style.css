@@ -99,3 +99,21 @@ input,select,textarea{background:#fffcf5;border-color:#c9c3ac}button{min-height:
 .vote-turnout h3,.vote-history h3{font-size:13px;margin:14px 0 8px}
 .vote-history p{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
 .manage-actions{display:flex;gap:8px;flex-shrink:0}
+
+/* Sign-up and rosters */
+.team-members{display:block;margin-top:3px;font-weight:500;color:var(--ink);opacity:.8;white-space:normal;overflow-wrap:anywhere}
+.join-form h3{margin:8px 0 10px;font-size:14px}
+.join-form .primary{width:100%;margin-top:20px;font-size:15px}
+.join-form [data-player=cancel]{width:100%;margin-top:10px}
+.join-done h2{display:flex;align-items:center;gap:6px}
+.roster{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:18px;margin-top:16px}
+.roster h3{display:flex;align-items:center;gap:4px;font-size:14px;margin-bottom:4px}
+.roster h3 small{color:var(--muted);font-weight:500}
+.roster p{font-size:14px!important;line-height:1.5}
+.player-desk h3{margin:22px 0 4px;font-size:13px}
+.player-add{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:center;margin-top:16px}
+.player-add input,.player-add select,.player-row select{margin:0}
+.manage-list>.player-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,130px) auto auto;gap:8px}
+.player-row strong{overflow-wrap:anywhere}
+.vote-as{display:flex;flex-wrap:wrap;align-items:center;gap:4px;font-size:14px!important;margin:14px 0}
+@media(max-width:480px){.manage-list>.player-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.player-add{grid-template-columns:1fr}}

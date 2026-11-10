@@ -1,13 +1,9 @@
 // Live voting for Bodies. Guests pick their team color and a name; the organizer runs the timer.
 // All reads and votes go through database functions, so results stay hidden until released.
+import {store, deviceId as voterId, getProfile} from './device.js';
+
 let ctx, state = null, offset = 0, error = '', sending = false;
-let pick = '', nameDraft = '', secondsDraft = '', historyOpen = false;
-const store = {
-  get(k) { try { return localStorage.getItem(k) } catch { return null } },
-  set(k, v) { try { localStorage.setItem(k, v) } catch { /* private window: keep in memory only */ } },
-};
-let voterId = store.get('vote-voter') || crypto.randomUUID();
-store.set('vote-voter', voterId);
+let pick = '', secondsDraft = '', historyOpen = false;
 let myTeam = store.get('vote-team') || '';
 let cast = JSON.parse(store.get('vote-cast') || 'null'); // {round, candidate}
 
@@ -19,6 +15,9 @@ const phase = () => !state ? 'loading' : state.status === 'open' && secondsLeft(
 const clock = () => { const s = secondsLeft(); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` };
 const dot = t => `<span class="dot" style="--team:${/^#[0-9a-f]{6}$/i.test(t?.color) ? t.color : '#888'}" aria-hidden="true"></span>`;
 const btn = (text, action, extra = '') => `<button type="button" data-vote="${action}" ${extra}>${text}</button>`;
+// This phone's sign-up (from the Join page), if it is still on the list.
+const me = () => { const p = getProfile(); return p && state?.candidates.find(c => c.id === p.id) || null };
+const voteTeam = () => me()?.team_id || myTeam;
 const myCast = () => cast && state && cast.round === state.round ? cast.candidate : '';
 
 function resultsHtml(live) {
@@ -44,24 +43,24 @@ function controls() {
   return `<section class="panel vote-desk"><div class="section-heading"><div><div class="eyebrow">ORGANIZER ONLY</div><h2>Voting controls</h2></div><span class="status-pill">${{ idle: 'Not started', open: 'Voting open', paused: 'Paused', closed: 'Time’s up', released: 'Results released' }[p]}</span></div>
 <label>Seconds to vote<input type="number" min="5" max="600" step="5" inputmode="numeric" data-vote-seconds value="${escape(secondsDraft || state.duration)}"></label>
 <div class="inline-actions">${btn(p === 'idle' ? 'Start voting ↗' : 'Start a new vote ↗', 'start', `class="primary" ${has && !running ? '' : 'disabled'}`)}${p === 'paused' ? btn('Resume', 'resume') : btn('Pause', 'pause', running ? '' : 'disabled')}${btn('Release results', 'release', p === 'idle' || p === 'released' ? 'disabled' : '')}${btn('Reset', 'reset', `class="danger-text" ${p === 'idle' && !state.total ? 'disabled' : ''}`)}</div>
-${has ? '' : '<p class="fineprint">Add at least two names before starting.</p>'}
-<h3>Who can be voted for</h3><div class="manage-list">${state.candidates.map(c => `<div><strong>${escape(c.name)}</strong>${btn('Remove', 'remove', `data-id="${c.id}"`)}</div>`).join('') || '<div><span class="muted">No names yet.</span></div>'}</div>
-<div class="vote-add"><input data-vote-name maxlength="40" placeholder="Add a name" aria-label="Name to add" value="${escape(nameDraft)}">${btn('+ Add', 'add')}</div>
+${has ? '' : '<p class="fineprint">At least two people need to be signed up before you can start.</p>'}
+<p><strong>${state.candidates.length} ${state.candidates.length === 1 ? 'person is' : 'people are'} on the ballot.</strong> The ballot is everyone on the sign-up list. <a class="text-link" href="#join">Add, edit or remove people ↗</a></p>
 ${p === 'idle' ? '' : `<details class="round-results"><summary>Live count · only you can see this <span>+</span></summary>${resultsHtml(true)}</details>`}
 <details class="round-results vote-history" ${historyOpen ? 'open' : ''}><summary>Vote history · who each team voted for <span>+</span></summary>${historyHtml()}</details></section>`;
 }
 
 function ballot() {
-  const { escape, getTeams } = ctx, p = phase(), open = p === 'open', voted = myCast();
+  const { escape, getTeams } = ctx, p = phase(), open = p === 'open', voted = myCast(), signedUp = me(), teamOf = c => getTeams().find(t => t.id === c.team_id);
   const votedName = state.candidates.find(c => c.id === voted)?.name;
   if (p === 'idle') return `<section class="panel vote-wait"><h2>Voting isn’t open yet.</h2><p>Keep this page open. The ballot appears as soon as the organizer starts a vote.</p></section>`;
   if (p === 'released') return `<section class="panel"><div class="eyebrow">THE RESULTS</div><h2>${state.total} ${state.total === 1 ? 'vote' : 'votes'} counted</h2>${resultsHtml(false)}</section>`;
   if (p === 'closed') return `<section class="panel vote-wait"><h2>Time’s up.</h2><p>${state.total} ${state.total === 1 ? 'vote is' : 'votes are'} in. Waiting for the organizer to release the results.</p>${votedName ? `<p>You voted for <strong>${escape(votedName)}</strong>.</p>` : ''}</section>`;
   return `<section class="panel vote-ballot"><div class="vote-clock ${open ? '' : 'paused'}"><span>${open ? 'TIME LEFT' : 'PAUSED'}</span><strong id="vote-clock">${clock()}</strong><small>${state.total} ${state.total === 1 ? 'vote' : 'votes'} in</small></div>
-<h3>1 · Your team color</h3><div class="vote-options">${getTeams().map(t => `<button type="button" data-vote="team" data-id="${t.id}" aria-pressed="${myTeam === t.id}" ${open ? '' : 'disabled'}>${dot(t)}${escape(t.name)}</button>`).join('')}</div>
-<h3>2 · Your vote</h3><div class="vote-options">${state.candidates.map(c => `<button type="button" data-vote="pick" data-id="${c.id}" aria-pressed="${(pick || voted) === c.id}" ${open ? '' : 'disabled'}>${escape(c.name)}</button>`).join('')}</div>
+${signedUp?.team_id ? `<p class="vote-as">Voting as <strong>${escape(signedUp.name)}</strong> · ${dot(teamOf(signedUp))}${escape(teamOf(signedUp)?.name || 'Team')} <a class="text-link" href="#join">Not you?</a></p>`
+    : `<h3>Your team color</h3><div class="vote-options">${getTeams().map(t => `<button type="button" data-vote="team" data-id="${t.id}" aria-pressed="${myTeam === t.id}" ${open ? '' : 'disabled'}>${dot(t)}${escape(t.name)}</button>`).join('')}</div><p class="fineprint"><a class="text-link" href="#join">Sign up</a> once and your team is remembered.</p>`}
+<h3>Your vote</h3><div class="vote-options">${state.candidates.map(c => `<button type="button" data-vote="pick" data-id="${c.id}" aria-pressed="${(pick || voted) === c.id}" ${open ? '' : 'disabled'}>${c.team_id ? dot(teamOf(c)) : ''}${escape(c.name)}</button>`).join('')}</div>
 ${btn(voted ? 'Change my vote ↗' : 'Cast my vote ↗', 'cast', `class="primary" ${open && !sending ? '' : 'disabled'}`)}
-<p class="vote-note" role="status">${votedName ? `Your vote is in for <strong>${escape(votedName)}</strong>. You can change it until time runs out.` : open ? 'Pick your team color and a name, then cast your vote.' : 'Voting is paused. Hang tight.'}</p></section>`;
+<p class="vote-note" role="status">${votedName ? `Your vote is in for <strong>${escape(votedName)}</strong>. You can change it until time runs out.` : open ? (signedUp?.team_id ? 'Pick a name, then cast your vote.' : 'Pick your team color and a name, then cast your vote.') : 'Voting is paused. Hang tight.'}</p></section>`;
 }
 
 export function votePage() {
@@ -95,23 +94,17 @@ async function act(action, id) {
   if (action === 'pick') { pick = id; return paint(true) }
   if (action === 'cast') {
     const choice = pick || myCast();
-    if (!getTeams().some(t => t.id === myTeam)) return toast('Pick your team color first.');
+    if (!getTeams().some(t => t.id === voteTeam())) return toast('Pick your team color first.');
     if (!choice) return toast('Pick who you’re voting for.');
     sending = true; paint(true);
-    const { error: e } = await db.rpc('cast_vote', { p_voter: voterId, p_team: myTeam, p_candidate: choice, p_round: state.round });
+    const { error: e } = await db.rpc('cast_vote', { p_voter: voterId, p_team: voteTeam(), p_candidate: choice, p_round: state.round });
     sending = false;
     if (e) toast(e.message); else { cast = { round: state.round, candidate: choice }; store.set('vote-cast', JSON.stringify(cast)); pick = ''; toast('Vote recorded.') }
     return load(true);
   }
   if (!ctx.admin()) return;
   let e;
-  if (action === 'add') {
-    const name = nameDraft.trim();
-    if (!name) return toast('Type a name first.');
-    ({ error: e } = await db.from('vote_candidates').insert({ name, sort_order: Math.max(0, ...state.candidates.map(c => c.sort_order)) + 1 }));
-    if (!e) nameDraft = '';
-  } else if (action === 'remove') ({ error: e } = await db.from('vote_candidates').delete().eq('id', id));
-  else {
+  {
     if (action === 'reset' && !confirm('Reset voting? All votes from this round are deleted.')) return;
     if (action === 'clear_history' && !confirm('Clear the vote history? This cannot be undone.')) return;
     const seconds = Number(secondsDraft || state.duration);
@@ -120,7 +113,6 @@ async function act(action, id) {
   }
   if (e) toast(e.message);
   await load(true);
-  if (action === 'add') document.querySelector('[data-vote-name]')?.focus();
 }
 
 export function initVote(context) {
@@ -129,10 +121,8 @@ export function initVote(context) {
   // Remember whether the history panel is open so repaints don't snap it shut.
   ctx.app.addEventListener('toggle', ev => { if (ev.target.matches?.('.vote-history')) historyOpen = ev.target.open }, true);
   ctx.app.addEventListener('input', ev => {
-    if (ev.target.matches('[data-vote-name]')) nameDraft = ev.target.value;
     if (ev.target.matches('[data-vote-seconds]')) secondsDraft = ev.target.value;
   });
-  ctx.app.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.matches('[data-vote-name]')) { ev.preventDefault(); act('add') } });
   window.addEventListener('hashchange', () => load(true));
   document.addEventListener('visibilitychange', () => { if (!document.hidden) load() });
   setInterval(() => { if (!document.hidden) load() }, 1500);
