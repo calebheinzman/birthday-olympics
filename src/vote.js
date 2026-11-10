@@ -1,7 +1,7 @@
 // Live voting for Bodies. Guests pick their team color and a name; the organizer runs the timer.
 // All reads and votes go through database functions, so results stay hidden until released.
 let ctx, state = null, offset = 0, error = '', sending = false;
-let pick = '', nameDraft = '', secondsDraft = '';
+let pick = '', nameDraft = '', secondsDraft = '', historyOpen = false;
 const store = {
   get(k) { try { return localStorage.getItem(k) } catch { return null } },
   set(k, v) { try { localStorage.setItem(k, v) } catch { /* private window: keep in memory only */ } },
@@ -26,7 +26,17 @@ function resultsHtml(live) {
   const tally = state.candidates.map(c => ({ ...c, votes: rows.filter(r => r.candidate_id === c.id) }))
     .map(c => ({ ...c, n: c.votes.reduce((a, r) => a + r.n, 0) })).sort((a, b) => b.n - a.n);
   const top = tally[0]?.n || 0, tied = top > 0 && tally.filter(c => c.n === top).length > 1;
-  return `<div class="vote-results">${live ? '' : `<p class="vote-verdict">${!top ? 'No votes were cast.' : tied ? 'It’s a tie — vote again.' : `${escape(tally[0].name)} has the most votes.`}</p>`}${tally.map(c => `<div class="vote-bar ${!live && top && c.n === top ? 'top' : ''}"><div class="vote-bar-head"><strong>${escape(c.name)}</strong><b>${c.n} ${c.n === 1 ? 'vote' : 'votes'}</b></div><div class="vote-track"><i style="width:${top ? Math.round(c.n / top * 100) : 0}%"></i></div><div class="vote-dots">${c.votes.map(r => { const t = getTeams().find(x => x.id === r.team_id); return `<span>${dot(t)}${escape(t?.name || 'Team')}${r.n > 1 ? ' ×' + r.n : ''}</span>` }).join('')}</div></div>`).join('')}</div>`;
+  const turnout = live ? '' : `<div class="vote-turnout"><h3>Votes cast by team</h3><div class="vote-dots">${getTeams().map(t => `<span>${dot(t)}${escape(t.name)}: <strong>${rows.filter(r => r.team_id === t.id).reduce((a, r) => a + r.n, 0)}</strong></span>`).join('')}</div></div>`;
+  return `<div class="vote-results">${live ? '' : `<p class="vote-verdict">${!top ? 'No votes were cast.' : tied ? 'It’s a tie — vote again.' : `${escape(tally[0].name)} has the most votes.`}</p>`}${tally.map(c => `<div class="vote-bar ${!live && top && c.n === top ? 'top' : ''}"><div class="vote-bar-head"><strong>${escape(c.name)}</strong><b>${c.n} ${c.n === 1 ? 'vote' : 'votes'}</b></div><div class="vote-track"><i style="width:${top ? Math.round(c.n / top * 100) : 0}%"></i></div><div class="vote-dots">${c.votes.map(r => { const t = getTeams().find(x => x.id === r.team_id); return `<span>${dot(t)}${escape(t?.name || 'Team')}${r.n > 1 ? ' ×' + r.n : ''}</span>` }).join('')}</div></div>`).join('')}${turnout}</div>`;
+}
+
+// Organizer-only record of every released vote, plus each team's running totals.
+function historyHtml() {
+  const { escape, getTeams } = ctx, rows = state.history || [], rounds = [...new Set(rows.map(r => r.round))];
+  if (!rows.length) return '<p class="fineprint">No votes released yet. Each vote is saved here when you release its results.</p>';
+  const picks = list => { const by = {}; list.forEach(r => by[r.name] = (by[r.name] || 0) + r.n); return Object.entries(by).sort((a, b) => b[1] - a[1]).map(([n, c]) => `${escape(n)} ×${c}`).join(', ') };
+  const block = (title, list) => `<h3>${title}</h3>${getTeams().map(t => { const mine = list.filter(r => r.team_id === t.id); return `<p>${dot(t)}${escape(t.name)} <span class="muted">(${mine.reduce((a, r) => a + r.n, 0)} votes)</span>: <strong>${picks(mine) || 'no votes'}</strong></p>` }).join('')}`;
+  return `${block('All votes so far', rows)}${rounds.map((round, i) => block('Vote ' + (i + 1), rows.filter(r => r.round === round))).join('')}${btn('Clear history', 'clear_history', 'class="danger-text"')}`;
 }
 
 function controls() {
@@ -37,7 +47,8 @@ function controls() {
 ${has ? '' : '<p class="fineprint">Add at least two names before starting.</p>'}
 <h3>Who can be voted for</h3><div class="manage-list">${state.candidates.map(c => `<div><strong>${escape(c.name)}</strong>${btn('Remove', 'remove', `data-id="${c.id}"`)}</div>`).join('') || '<div><span class="muted">No names yet.</span></div>'}</div>
 <div class="vote-add"><input data-vote-name maxlength="40" placeholder="Add a name" aria-label="Name to add" value="${escape(nameDraft)}">${btn('+ Add', 'add')}</div>
-${p === 'idle' ? '' : `<details class="round-results"><summary>Live count · only you can see this <span>+</span></summary>${resultsHtml(true)}</details>`}</section>`;
+${p === 'idle' ? '' : `<details class="round-results"><summary>Live count · only you can see this <span>+</span></summary>${resultsHtml(true)}</details>`}
+<details class="round-results vote-history" ${historyOpen ? 'open' : ''}><summary>Vote history · who each team voted for <span>+</span></summary>${historyHtml()}</details></section>`;
 }
 
 function ballot() {
@@ -102,6 +113,7 @@ async function act(action, id) {
   } else if (action === 'remove') ({ error: e } = await db.from('vote_candidates').delete().eq('id', id));
   else {
     if (action === 'reset' && !confirm('Reset voting? All votes from this round are deleted.')) return;
+    if (action === 'clear_history' && !confirm('Clear the vote history? This cannot be undone.')) return;
     const seconds = Number(secondsDraft || state.duration);
     if (action === 'start' && !(Number.isInteger(seconds) && seconds >= 5 && seconds <= 600)) return toast('Choose between 5 and 600 seconds.');
     ({ error: e } = await db.rpc('vote_control', { p_action: action, p_seconds: seconds }));
@@ -114,6 +126,8 @@ async function act(action, id) {
 export function initVote(context) {
   ctx = context;
   ctx.app.addEventListener('click', ev => { const b = ev.target.closest('[data-vote]'); if (b && !b.disabled) act(b.dataset.vote, b.dataset.id) });
+  // Remember whether the history panel is open so repaints don't snap it shut.
+  ctx.app.addEventListener('toggle', ev => { if (ev.target.matches?.('.vote-history')) historyOpen = ev.target.open }, true);
   ctx.app.addEventListener('input', ev => {
     if (ev.target.matches('[data-vote-name]')) nameDraft = ev.target.value;
     if (ev.target.matches('[data-vote-seconds]')) secondsDraft = ev.target.value;
