@@ -39,3 +39,48 @@ input,select,textarea{background:#fffcf5;border-color:#c9c3ac}button{min-height:
 .point-rounds{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:20px;margin:24px 0}.point-round{min-width:0;border:1px solid var(--line,#d8d6cd);border-radius:12px;padding:16px}.point-round legend{font-weight:700;padding:0 8px}.point-team-row{display:grid;grid-template-columns:14px minmax(0,1fr) 84px;align-items:center;gap:10px;margin:12px 0}.point-team-row input{min-width:0;width:100%;text-align:center}.point-team-row strong{overflow-wrap:anywhere}.points-preview{margin:20px 0}.points-preview span{display:inline-flex;gap:7px;align-items:center;margin:6px 18px 6px 0}.round-results{margin-top:16px}.round-results h3{margin-top:20px}.round-results p{margin:6px 0}
 
 .mini-results b small{display:block;font-size:10px;font-weight:400}.point-team-row select{min-width:0;width:100%}
+
+/* Heat lists have no drag handle, so drop that grid column on small screens. */
+.score-panel .heat-list{margin:12px 0}
+.score-panel .heat-list li{grid-template-columns:28px 18px minmax(0,1fr) 42px}
+.score-panel .heat-list .move-buttons{grid-column:3/5}
+
+/* Manual point edits */
+.manual-points{margin-top:22px}
+/* Voting */
+.vote-clock{display:grid;justify-items:center;gap:2px;padding:18px;border:1px solid var(--line);border-radius:12px;margin-bottom:8px}
+.vote-clock span{font-size:11px;font-weight:700;letter-spacing:.12em;color:var(--muted)}
+.vote-clock strong{font-family:'Barlow Condensed',sans-serif;font-size:72px;line-height:1;color:var(--orange);font-variant-numeric:tabular-nums}
+.vote-clock.paused strong{color:var(--muted)}
+.vote-clock small{font-size:12px;color:var(--muted)}
+.vote-ballot h3,.vote-desk h3{margin:24px 0 10px;font-size:14px}
+.vote-options{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:8px}
+.vote-options button{display:flex;align-items:center;justify-content:center;gap:6px;min-height:56px;font-size:15px;overflow-wrap:anywhere}
+.vote-options button[aria-pressed=true]{border:2px solid var(--orange);background:color-mix(in srgb,var(--orange) 12%,transparent)}
+.vote-ballot .primary{width:100%;margin-top:20px;font-size:15px}
+.vote-note{margin-top:14px}
+.vote-add{display:flex;gap:10px;align-items:center}
+.vote-add input{margin:0}
+.vote-add button{white-space:nowrap}
+.vote-desk .inline-actions{flex-wrap:wrap}
+.vote-verdict{font-size:16px!important;font-weight:700;margin:14px 0}
+.vote-bar{padding:12px 0;border-top:1px solid var(--line)}
+.vote-bar-head{display:flex;justify-content:space-between;gap:12px;font-size:15px}
+.vote-track{height:10px;border-radius:5px;background:color-mix(in srgb,var(--ink) 8%,transparent);margin:8px 0;overflow:hidden}
+.vote-track i{display:block;height:100%;background:var(--muted);border-radius:5px}
+.vote-bar.top .vote-track i{background:var(--orange)}
+.vote-dots{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--muted)}
+.vote-dots span{display:inline-flex;align-items:center}
+
+/* Schedule */
+.schedule-section{margin:48px 0 24px}
+.schedule-section>p{font-size:13px;color:var(--muted);margin:8px 0 18px}
+.schedule-list{list-style:none;padding:0;margin:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fffdf7}
+.schedule-list li{display:grid;grid-template-columns:84px minmax(0,1fr) auto;gap:12px;align-items:center;padding:14px 18px;border-top:1px solid var(--line)}
+.schedule-list li:first-child{border-top:0}
+.schedule-list time{font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:700;color:var(--orange);font-variant-numeric:tabular-nums;white-space:nowrap}
+.schedule-list strong{display:block;font-size:15px}
+.schedule-list small{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.schedule-list span{font-size:12px;color:var(--muted);white-space:nowrap}
+.schedule-list li.extra time,.schedule-list li.extra strong{color:var(--muted);font-weight:600}
+@media(max-width:480px){.schedule-list li{grid-template-columns:70px minmax(0,1fr) auto;padding:12px;gap:8px}.schedule-list time{font-size:17px}}

@@ -73,13 +73,13 @@ test('Betrayal tallies award placement points instead of raw totals; corrections
  const e={scoring_mode:'betrayal',point_rounds:[{name:'Round 1',scores:{red:5,blue:0,green:2}},{name:'Round 2',scores:{red:0,blue:5,green:2}}]};
  assert.ok(validateBetrayalRounds(e.point_rounds,teams));
  assert.equal(eventResult(e,'red').rawPoints,5);
- assert.equal(eventResult(e,'red').points,6);
+ assert.equal(eventResult(e,'red').points,4); // tied 1st: share 6+3
  assert.equal(eventResult(e,'blue').label,'Tied 1st');
  assert.equal(eventResult(e,'green').points,0);
  e.point_rounds[1].scores.green=5;
  assert.equal(eventResult(e,'green').rawPoints,7);
  assert.equal(eventResult(e,'green').points,6);
- assert.equal(eventResult(e,'red').points,3);
+ assert.equal(eventResult(e,'red').points,1); // tied 2nd: share 3+0
 });
 test('Betrayal all-betray round earns zero and no win for every color',async()=>{
  const {eventResult}=await import('../src/scoring.js');
@@ -94,4 +94,54 @@ test('Betrayal validates payoff values and six-round maximum and keeps maximum a
  assert.equal(eventResult({scoring_mode:'betrayal',point_rounds:rounds},'red').points,6);
  assert.equal(validateBetrayalRounds([...rounds,rounds[0]],teams),false);
  assert.equal(validateBetrayalRounds([{name:'Invalid',scores:{red:3,blue:0,green:0}}],teams),false);
+});
+
+test('heats pool matching places so the event pays the same as a ranked event', async () => {
+ const {heatPlacePoints,heatResults,eventResult,validateHeats,rankedPoints,hasResult} = await import('../src/scoring.js');
+ assert.deepEqual(heatPlacePoints([3,3]), [8,3,0]);
+ const total = sizes => {const a=heatPlacePoints(sizes);return sizes.reduce((n,k)=>n+a.slice(0,k).reduce((x,y)=>x+y,0),0)};
+ assert.equal(total([3,3]), rankedPoints(6).reduce((a,b)=>a+b));
+ for (const s of [[2,2,2],[4,2],[3,2],[4,4],[3,3,2]]) assert.ok(total(s) <= rankedPoints(s.reduce((a,b)=>a+b)).reduce((a,b)=>a+b));
+ const heats=[{name:'Heat 1',order:['a','b','c']},{name:'Heat 2',order:['d','e','f']}];
+ const r=heatResults(heats);
+ assert.equal(r.a.points, r.d.points); assert.equal(r.b.points, r.e.points); assert.equal(r.c.points, r.f.points);
+ const event={scoring_mode:'heats',point_rounds:heats};
+ assert.ok(hasResult(event));
+ assert.deepEqual(eventResult(event,'d'), {label:'1st · Heat 2',points:8,played:true,win:true,heat:1});
+ const teams=['a','b','c','d','e','f'].map(id=>({id}));
+ assert.ok(validateHeats(heats,teams));
+ assert.ok(!validateHeats([{name:'Heat 1',order:['a','b','c']},{name:'Heat 2',order:['d','e']}],teams));
+ assert.ok(!validateHeats([{name:'Heat 1',order:['a','b','c','d']},{name:'Heat 2',order:['d','e','f']}],teams));
+ assert.ok(!validateHeats([{name:'Heat 1',order:['a','b','c','d','e']},{name:'Heat 2',order:['f']}],teams));
+});
+
+test('Boom Cup: every winner earns points, only the loser loses points, net payout matches a ranked event', async () => {
+ const {eventResult,hasResult,rankedPoints,loserPoints} = await import('../src/scoring.js');
+ const ids=['a','b','c','d','e','f'],e={scoring_mode:'loser',placements:ids};
+ assert.ok(hasResult(e));
+ assert.deepEqual(eventResult(e,'f'),{label:'Loser',points:-3,played:true,win:false});
+ assert.deepEqual(eventResult(e,'a'),{label:'Winner',points:5,played:true,win:true});
+ for (let n=2;n<=12;n++){const a=loserPoints(n);assert.ok(a.winner>0&&a.loser<0);assert.equal((n-1)*a.winner+a.loser,rankedPoints(n).reduce((x,y)=>x+y))}
+});
+test('manual overrides replace an event award and total adjustments shift the leaderboard', async () => {
+ const {eventResult,validateOverrides} = await import('../src/scoring.js');
+ const e={placements:['red','blue','green'],point_overrides:{blue:10}};
+ assert.equal(eventResult(e,'red').points,6);
+ assert.deepEqual(eventResult(e,'blue'),{label:'2nd',points:10,played:true,win:false,calculated:3,manual:true});
+ const rows=standings(teams.map(t=>t.id==='green'?{...t,points_adjustment:-2}:t),[e]);
+ assert.deepEqual(rows.map(t=>[t.id,t.total]),[['blue',10],['red',6],['green',-2]]);
+ assert.equal(eventResult({placements:[],point_overrides:{blue:10}},'blue'),null);
+ assert.ok(validateOverrides({red:0,blue:-5},teams));
+ assert.ok(!validateOverrides({red:1.5},teams)); assert.ok(!validateOverrides({pink:1},teams));
+});
+test('Betrayal ties never pay out more than a ranked event', async () => {
+ const {tallyAwards,rankedPoints} = await import('../src/scoring.js');
+ const max=rankedPoints(6).reduce((x,y)=>x+y);
+ for (const v of [[5,5,5,0,0,0],[2,2,2,2,2,2],[5,0,2,2,5,0],[5,2,2,0,5,2]]) {const a=tallyAwards(v);assert.ok(v.reduce((n,x)=>n+(x===0?0:a[x]),0)<=max)}
+});
+test('schedule starts at 2 PM and runs the games back to back', async () => {
+ const {buildSchedule} = await import('../src/schedule.js');
+ const rows = buildSchedule(['Arms Up','Shuff & Pool',"King's Cup",'Bodies','Betrayal','Boom Cup','Beerio Kart','Beer Pong'].map(name=>({name})));
+ assert.equal(rows[0].time,'2:00 PM'); assert.equal(rows[1].name,'Arms Up'); assert.equal(rows[1].time,'2:30 PM');
+ assert.equal(rows.at(-2).name,'Beer Pong'); assert.equal(rows.length,10); assert.ok(!rows.some(r=>/break/i.test(r.name)));
 });

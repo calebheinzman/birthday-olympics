@@ -1,6 +1,6 @@
 # Birthday Olympics
 
-Public site: https://calebheinzman.github.io/beerlympics/
+Public site: https://calebheinzman.github.io/birthday-olympics/
 
 A phone-friendly birthday event scoreboard hosted on GitHub Pages, with Supabase for shared results and organizer authentication.
 
@@ -26,7 +26,17 @@ Ranked games use a non-linear scale with a larger first-place bonus and zero for
 
 Two-side events award **3 points to each winning color team and 0 to every losing color team**. A draw/no winner and sitting out award zero. This applies regardless of how many colors are grouped on either side. Assign colors to Side A, Side B, or Not playing, then choose the result. Choose scoring format in Add/Edit game; clear results before changing format.
 
-Custom-points events let the organizer name rounds and enter 0–999 whole leaderboard points per team per round. Suggested awards are 3 for a win and 0 for a loss; tied winners can receive equal awards. All rounds add directly into one event total with no extra placement bonus. Add two rounds for two Beerio Kart tournaments or separate Shuffleboard and Pool rounds. Corrections replace saved rounds atomically. Guests can expand round-by-round points, and equal event totals share a place.
+Heat events (Beerio Kart) split teams into separate races. In the score desk, pick each team's heat and put each heat in finishing order; points are automatic. The same place in every heat earns the same award, pooled from the normal ranked table so the event pays the same total as any other ranked event. Six teams in two heats of three: **8, 3, 0** per heat (22 total, matching 9+6+4+2+1+0). Uneven splits never award more than a ranked event. Schema: supabase/migrations/20261110120000_heats_loser_and_rules.sql.
+
+One-loser events (Boom Cup) record a single losing team; every other team wins and earns the same award while the loser is docked points, sized so the net payout equals a ranked event (six teams: +5 each, loser −3, net 22). Betrayal is played as one round per team; tied scores split the points for the places they share, so ties never add extra points.
+
+Manual edits: once a game has results, **Edit points manually** in the score desk overrides any team's points for that game (`events.point_overrides`); **Overall totals** lets the organizer type a team's leaderboard total, stored as an adjustment (`teams.points_adjustment`) so later games still add on top.
+
+Voting (Bodies): the **Vote** tab shows a ballot to guests. They must pick their team color, then a name; one vote per phone, changeable until time runs out. Signed in, the organizer adds names, sets the seconds, and can start, pause/resume, reset, and release results. Results stay hidden from guests until released. Tables and functions are in supabase/migrations/20261110130000_manual_points_and_voting.sql; guests only reach votes through `vote_state()` and `cast_vote()`.
+
+Schedule: the bottom of the games page shows a Saturday timeline starting at 2:00 PM. It follows the game list order; setup and play minutes per game live in src/schedule.js. The party order is set by supabase/migrations/20261110140000_party_order.sql.
+
+Custom-points events let the organizer name rounds and enter 0–999 whole leaderboard points per team per round. Suggested awards are 3 for a win and 0 for a loss; tied winners can receive equal awards. All rounds add directly into one event total with no extra placement bonus. Use separate Shuffleboard and Pool rounds. Corrections replace saved rounds atomically. Guests can expand round-by-round points, and equal event totals share a place.
 
 Equal overall totals share rank. Ranked-event ties must be resolved before publishing. Existing placements are recalculated with the current scoring scale. Simulations in `analysis/scoring-simulation.py` compare several scales with a fixed random seed and 100,000 trials per scenario; output is `analysis/scoring-simulation.json`. These equal-skill simulations are balance checks, not forecasts. End with a ranked event if comeback potential matters; any positive-point system can eventually be clinched after a sustained lead.
 
@@ -34,7 +44,7 @@ Equal overall totals share rank. Ranked-event ties must be resolved before publi
 
 Node 22+. Run `npm ci`, `npm run dev`. Tests: `npm test`. Production: `npm run build`.
 
-Pushing main runs tests and publishes dist using GitHub Actions / GitHub Pages. The build base is `/beerlympics/`; change it in package.json when renaming the repository.
+Pushing main runs tests and publishes dist using GitHub Actions / GitHub Pages. The build base is `/birthday-olympics/`; change it in package.json when renaming the repository.
 
 The public Supabase URL and publishable key are in src/config.js. They are intentionally public; the database's row-level security grants writes only to the organizer UUID, not merely to signed-in users. No service-role key is shipped. SQL schema and seed data are in database/schema.sql and deployed through a Supabase migration. Do not rerun the initial schema on an existing database.
 
@@ -42,7 +52,7 @@ Supabase project: nbfvlycfvxzothkkjxiv. The organizer-setup edge function is dis
 
 Supabase free projects may pause when inactive; check the site before the party and restore the project from Supabase if needed. New projects were quoted at $0/month in the selected free organization. GitHub Pages hosts only the static frontend; Supabase stores all shared data.
 
-The two-side event schema extension is in database/changes/two-side-events.sql and is deployed after the original schema. The GitHub repository URL is retained so existing shared links keep working.
+The two-side event schema extension is in database/changes/two-side-events.sql and is deployed after the original schema. The repository was renamed to birthday-olympics; the old /beerlympics/ address no longer works.
 
 The flexible-points extension and King's Cup seed are in supabase/migrations/20261103022647_flexible_event_points.sql, applied after the two-side extension.
 

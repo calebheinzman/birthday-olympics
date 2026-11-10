@@ -10,16 +10,37 @@ export const ordinal = n => `${n}${n%100>=11&&n%100<=13?'th':({1:'st',2:'nd',3:'
 export const isSideEvent = event => event.scoring_mode==='sides';
 export const isPointsEvent = event => event.scoring_mode==='points';
 export const isTallyEvent = event => event.scoring_mode==='betrayal';
+export const isLoserEvent = event => event.scoring_mode==='loser';
+export const isHeatEvent = event => event.scoring_mode==='heats';
 export const isRoundEvent = event => isPointsEvent(event)||isTallyEvent(event);
 export const pointTotals = event => Object.fromEntries(Object.keys(event.point_rounds?.[0]?.scores||{}).map(id=>[id,event.point_rounds.reduce((sum,r)=>sum+r.scores[id],0)]));
-export const hasResult = event => isRoundEvent(event)?!!event.point_rounds?.length:isSideEvent(event)?['a','b','draw'].includes(event.winner):!!event.placements?.length;
+export const hasResult = event => isRoundEvent(event)||isHeatEvent(event)?!!event.point_rounds?.length:isSideEvent(event)?['a','b','draw'].includes(event.winner):!!event.placements?.length;
+// Organizer overrides: event.point_overrides = {teamId: points} replaces the calculated award.
+export const hasOverride = (event,teamId) => Number.isInteger(event.point_overrides?.[teamId]);
 export function eventResult(event,teamId){
+ const r=calculatedResult(event,teamId);
+ return r&&hasOverride(event,teamId)?{...r,points:event.point_overrides[teamId],calculated:r.points,manual:true}:r;
+}
+export function calculatedResult(event,teamId){
  if(!hasResult(event))return null;
+ if(isLoserEvent(event)){
+  // placements = every team, with the single loser last; all others tie as winners.
+  const i=event.placements.indexOf(teamId),n=event.placements.length;
+  if(i<0)return {label:'Did not play',points:0,played:false,win:false};
+  const lost=i===n-1;
+  const award=loserPoints(n);
+  return {label:lost?'Loser':'Winner',points:lost?award.loser:award.winner,played:true,win:!lost};
+ }
+ if(isHeatEvent(event)){
+  const r=heatResults(event.point_rounds)[teamId];
+  if(!r)return {label:'Did not play',points:0,played:false,win:false};
+  return {label:`${ordinal(r.place)} · ${r.heatName}`,points:r.points,played:true,win:r.place===1,heat:r.heat};
+ }
  if(isRoundEvent(event)){
   const totals=pointTotals(event),points=totals[teamId];
   if(points===undefined)return {label:'Did not play',points:0,played:false,win:false};
   const values=Object.values(totals),rank=1+values.filter(p=>p>points).length,tied=values.filter(p=>p===points).length>1;
-  const award=isTallyEvent(event)?(points===0?0:rankedPoints(values.length)[rank-1]):points;
+  const award=isTallyEvent(event)?(points===0?0:tallyAwards(values)[points]):points;
   return {label:isTallyEvent(event)&&Math.max(...values)===0?'Draw':(tied?'Tied ':'')+ordinal(rank),points:award,rawPoints:isTallyEvent(event)?points:undefined,played:true,win:rank===1&&points>0};
  }
  if(isSideEvent(event)){
@@ -34,10 +55,11 @@ export function eventResult(event,teamId){
 export function standings(teams,events){
  const rows=teams.map(t=>{
   const results=events.map(e=>eventResult(e,t.id)).filter(Boolean);
-  return {...t,total:results.reduce((sum,r)=>sum+r.points,0),wins:results.filter(r=>r.win).length,played:results.filter(r=>r.played).length};
+  return {...t,total:results.reduce((sum,r)=>sum+r.points,0)+(t.points_adjustment||0),wins:results.filter(r=>r.win).length,played:results.filter(r=>r.played).length};
  }).sort((a,b)=>b.total-a.total||a.sort_order-b.sort_order);
  return rows.map((t,i)=>({...t,rank:i&&t.total===rows[i-1].total?rows.findIndex(x=>x.total===t.total)+1:i+1}));
 }
+export const validateOverrides = (values,teams) => Object.entries(values).every(([id,v])=>teams.some(t=>t.id===id)&&Number.isInteger(v)&&v>=-999&&v<=999);
 export function validateOrder(order,teams){return order.length===teams.length && new Set(order).size===teams.length && order.every(id=>teams.some(t=>t.id===id));}
 export function validateSides(sideA,sideB,winner,teams){
  const ids=[...sideA,...sideB];
@@ -51,3 +73,45 @@ export function validatePointRounds(rounds,teams){
 }
 
 export function validateBetrayalRounds(rounds,teams){return validatePointRounds(rounds,teams)&&rounds.length<=6&&rounds.every(r=>Object.values(r.scores).every(p=>[0,2,5].includes(p)));}
+
+// Heats: teams are split into separate races. Matching finishes across heats share the
+// same award, pooled from the normal ranked table for every team that raced, so the
+// event pays out the same total as any other ranked event.
+// Pool the normal ranked table across tied groups (best group first). Each team in a group
+// gets an equal whole-number share; the event never pays out more than a normal ranked event.
+export function pooledAwards(groupSizes){
+ const table=rankedPoints(groupSizes.reduce((a,b)=>a+b,0));let slot=0;
+ const groups=groupSizes.map(size=>{const sum=table.slice(slot,slot+size).reduce((a,b)=>a+b,0);slot+=size;return {size,points:Math.floor(sum/size),rem:sum%size}});
+ let left=table.reduce((a,b)=>a+b,0)-groups.reduce((n,g)=>n+g.size*g.points,0);
+ // Hand rounding leftovers to the highest places first, never letting a lower place pass a higher one.
+ for(let i=0;i<groups.length&&left>0;i++){const g=groups[i];if(g.rem>0&&g.size<=left&&(i===0||g.points+1<=groups[i-1].points)){g.points++;left-=g.size}}
+ return groups.map(g=>g.points);
+}
+// Heats: matching finishes across heats form one tied group.
+export function heatPlacePoints(heatSizes){
+ const sizes=heatSizes.filter(n=>n>0),longest=Math.max(0,...sizes);
+ return pooledAwards(Array.from({length:longest},(_,p)=>sizes.filter(n=>n>p).length));
+}
+// One-loser games: every winner earns the same positive award and the loser is docked points,
+// sized so the event's net payout equals a normal ranked event (six teams: +5 each, -3).
+export function loserPoints(n){
+ if(n<2)return {winner:0,loser:0};
+ const total=rankedPoints(n).reduce((a,b)=>a+b,0),winner=Math.ceil((total+1)/(n-1));
+ return {winner,loser:total-(n-1)*winner};
+}
+// Betrayal: equal tallies share the pooled points for the places they cover. Returns {tally: award}.
+export function tallyAwards(values){
+ const distinct=[...new Set(values)].sort((a,b)=>b-a),award=pooledAwards(distinct.map(v=>values.filter(x=>x===v).length));
+ return Object.fromEntries(distinct.map((v,i)=>[v,award[i]]));
+}
+export function heatResults(heats=[]){
+ const award=heatPlacePoints(heats.map(h=>h.order?.length||0)),out={};
+ heats.forEach((h,heat)=>(h.order||[]).forEach((id,i)=>{out[id]={place:i+1,heat,heatName:h.name,points:award[i]}}));
+ return out;
+}
+export function validateHeats(heats,teams){
+ if(!Array.isArray(heats)||heats.length<1||heats.length>6)return false;
+ const ids=heats.flatMap(h=>h.order||[]);
+ return heats.every(h=>typeof h.name==='string'&&h.name.trim().length>0&&h.name.length<=60&&Array.isArray(h.order)&&h.order.length>=2)&&
+  ids.length===teams.length&&new Set(ids).size===ids.length&&ids.every(id=>teams.some(t=>t.id===id));
+}
