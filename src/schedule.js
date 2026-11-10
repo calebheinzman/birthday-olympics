@@ -3,8 +3,7 @@
 export const START = {day: 'Saturday', hour: 14, minute: 0};
 // [setup minutes, play minutes] by game name; unknown games fall back to DEFAULT.
 const TIMING = {
-  'Arms Up': [10, 10],
-  'Shuff & Pool': [10, 30],
+  'Arms, Shuff & Pool': [10, 45], // three stations at once, up to three rounds
   "King's Cup": [10, 25],
   'Bodies': [10, 30],
   'Betrayal': [5, 10],

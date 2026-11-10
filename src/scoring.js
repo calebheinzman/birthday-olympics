@@ -11,10 +11,11 @@ export const isSideEvent = event => event.scoring_mode==='sides';
 export const isPointsEvent = event => event.scoring_mode==='points';
 export const isTallyEvent = event => event.scoring_mode==='betrayal';
 export const isLoserEvent = event => event.scoring_mode==='loser';
+export const isMatchEvent = event => event.scoring_mode==='matchups';
 export const isHeatEvent = event => event.scoring_mode==='heats';
 export const isRoundEvent = event => isPointsEvent(event)||isTallyEvent(event);
 export const pointTotals = event => Object.fromEntries(Object.keys(event.point_rounds?.[0]?.scores||{}).map(id=>[id,event.point_rounds.reduce((sum,r)=>sum+r.scores[id],0)]));
-export const hasResult = event => isRoundEvent(event)||isHeatEvent(event)?!!event.point_rounds?.length:isSideEvent(event)?['a','b','draw'].includes(event.winner):!!event.placements?.length;
+export const hasResult = event => isMatchEvent(event)?(event.point_rounds||[]).some(r=>(r.matches||[]).some(m=>m.winner)):isRoundEvent(event)||isHeatEvent(event)?!!event.point_rounds?.length:isSideEvent(event)?['a','b','draw'].includes(event.winner):!!event.placements?.length;
 // Organizer overrides: event.point_overrides = {teamId: points} replaces the calculated award.
 export const hasOverride = (event,teamId) => Number.isInteger(event.point_overrides?.[teamId]);
 export function eventResult(event,teamId){
@@ -23,6 +24,12 @@ export function eventResult(event,teamId){
 }
 export function calculatedResult(event,teamId){
  if(!hasResult(event))return null;
+ if(isMatchEvent(event)){
+  const rec=matchRecords(event.point_rounds),r=rec[teamId];
+  if(!r)return {label:'Did not play',points:0,played:false,win:false};
+  const diffs=Object.values(rec).map(x=>x.wins-x.losses),diff=r.wins-r.losses,rank=1+diffs.filter(d=>d>diff).length,tied=diffs.filter(d=>d===diff).length>1;
+  return {label:`${tied?'Tied ':''}${ordinal(rank)} · ${r.wins}–${r.losses}`,points:tallyAwards(diffs)[diff],played:true,win:rank===1&&r.wins>0};
+ }
  if(isLoserEvent(event)){
   // placements = every team, with the single loser last; all others tie as winners.
   const i=event.placements.indexOf(teamId),n=event.placements.length;
@@ -114,4 +121,23 @@ export function validateHeats(heats,teams){
  const ids=heats.flatMap(h=>h.order||[]);
  return heats.every(h=>typeof h.name==='string'&&h.name.trim().length>0&&h.name.length<=60&&Array.isArray(h.order)&&h.order.length>=2)&&
   ids.length===teams.length&&new Set(ids).size===ids.length&&ids.every(id=>teams.some(t=>t.id===id));
+}
+
+// Matchups: rounds of head-to-head games. point_rounds = [{name, matches:[{game,a,b,winner}]}].
+// Teams are ranked by win-loss record; equal records share pooled placement points.
+export function matchRecords(rounds=[]){
+ const rec={};
+ for(const r of rounds)for(const m of r.matches||[]){
+  for(const id of [m.a,m.b])if(id)rec[id]??={wins:0,losses:0};
+  if(m.winner&&m.a&&m.b&&(m.winner===m.a||m.winner===m.b)){rec[m.winner].wins++;rec[m.winner===m.a?m.b:m.a].losses++}
+ }
+ return rec;
+}
+export function validateMatchups(rounds,teams){
+ const known=id=>teams.some(t=>t.id===id);
+ return Array.isArray(rounds)&&rounds.length>=1&&rounds.length<=10&&rounds.every(r=>{
+  if(typeof r.name!=='string'||!r.name.trim()||r.name.length>60||!Array.isArray(r.matches)||r.matches.length<1||r.matches.length>12)return false;
+  const ids=r.matches.flatMap(m=>[m.a,m.b]);
+  return new Set(ids).size===ids.length&&r.matches.every(m=>typeof m.game==='string'&&m.game.length<=40&&known(m.a)&&known(m.b)&&(m.winner===null||m.winner===m.a||m.winner===m.b));
+ });
 }

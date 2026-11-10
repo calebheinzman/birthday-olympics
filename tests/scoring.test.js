@@ -141,7 +141,23 @@ test('Betrayal ties never pay out more than a ranked event', async () => {
 });
 test('schedule starts at 2 PM and runs the games back to back', async () => {
  const {buildSchedule} = await import('../src/schedule.js');
- const rows = buildSchedule(['Arms Up','Shuff & Pool',"King's Cup",'Bodies','Betrayal','Boom Cup','Beerio Kart','Beer Pong'].map(name=>({name})));
- assert.equal(rows[0].time,'2:00 PM'); assert.equal(rows[1].name,'Arms Up'); assert.equal(rows[1].time,'2:30 PM');
- assert.equal(rows.at(-2).name,'Beer Pong'); assert.equal(rows.length,10); assert.ok(!rows.some(r=>/break/i.test(r.name)));
+ const rows = buildSchedule(['Arms, Shuff & Pool',"King's Cup",'Bodies','Betrayal','Boom Cup','Beerio Kart','Beer Pong'].map(name=>({name})));
+ assert.equal(rows[0].time,'2:00 PM'); assert.equal(rows[1].name,'Arms, Shuff & Pool'); assert.equal(rows[1].time,'2:30 PM'); assert.equal(rows[2].time,'3:25 PM');
+ assert.equal(rows.at(-2).name,'Beer Pong'); assert.equal(rows.length,9); assert.ok(!rows.some(r=>/break/i.test(r.name)));
+});
+test('matchup editor renders a draft and applies winner taps', async () => {
+ const m = await import('../src/matchups.js');
+ const teams=['a','b','c','d','e','f'].map(id=>({id,name:id.toUpperCase(),color:'#112233'})),event={scoring_mode:'matchups',point_rounds:[]};
+ const ui={teams,busy:false,escape:x=>String(x??''),dot:()=>'',button:(t,a,e='')=>`<button data-action="${a}" ${e}>${t}</button>`,event};
+ m.loadMatchDraft(event,teams);
+ assert.match(m.matchEditor(ui),/Arms Up[\s\S]*Shuffleboard[\s\S]*Pool/);
+ assert.deepEqual(m.getMatchDraft(),[]);
+ m.matchChange({dataset:{r:'0',m:'0',matchTeam:'a'},value:'a'}); m.matchChange({dataset:{r:'0',m:'0',matchTeam:'b'},value:'b'});
+ assert.ok(m.matchClick('match-win',{r:'0',m:'0',id:'b'}));
+ assert.deepEqual(m.getMatchDraft(),[{name:'Round 1',matches:[{game:'Arms Up',a:'a',b:'b',winner:'b'}]}]);
+ assert.match(m.matchEditor(ui),/B: <strong>1–0 · \d+ pts/);
+ m.matchChange({dataset:{r:'0',m:'0',matchTeam:'b'},value:'c'});
+ assert.equal(m.getMatchDraft()[0].matches[0].winner,null);
+ assert.ok(m.matchClick('match-add-round',{})); assert.match(m.matchEditor(ui),/Round 2/);
+ assert.match(m.matchSummary({point_rounds:[{name:'Round 1',matches:[{game:'Pool',a:'a',b:'b',winner:'b'}]}]},teams,ui.escape),/Pool: <strong>B<\/strong> beat A/);
 });

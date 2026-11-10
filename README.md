@@ -36,6 +36,8 @@ Voting (Bodies): the **Vote** tab shows a ballot to guests. They must pick their
 
 Schedule: the bottom of the games page shows a Saturday timeline starting at 2:00 PM. It follows the game list order; setup and play minutes per game live in src/schedule.js. The party order is set by supabase/migrations/20261110140000_party_order.sql.
 
+Matchup events (Arms, Shuff & Pool) run several head-to-head stations at once over two or three rounds. In the score desk, set who plays whom each round and tap each winner; matchups can be saved before winners are known. Teams are ranked by win–loss record and equal records split pooled placement points. Schema and the Arms Up merge: supabase/migrations/20261110150000_matchups_and_station_event.sql.
+
 Custom-points events let the organizer name rounds and enter 0–999 whole leaderboard points per team per round. Suggested awards are 3 for a win and 0 for a loss; tied winners can receive equal awards. All rounds add directly into one event total with no extra placement bonus. Use separate Shuffleboard and Pool rounds. Corrections replace saved rounds atomically. Guests can expand round-by-round points, and equal event totals share a place.
 
 Equal overall totals share rank. Ranked-event ties must be resolved before publishing. Existing placements are recalculated with the current scoring scale. Simulations in `analysis/scoring-simulation.py` compare several scales with a fixed random seed and 100,000 trials per scenario; output is `analysis/scoring-simulation.json`. These equal-skill simulations are balance checks, not forecasts. End with a ranked event if comeback potential matters; any positive-point system can eventually be clinched after a sustained lead.
