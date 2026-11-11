@@ -7,6 +7,7 @@ const TIMING = {
   "King's Cup": [10, 25],
   'Bodies': [10, 30],
   'Betrayal': [5, 10],
+  'Ice Tray Relay': [5, 10],
   'Boom Cup': [5, 15],
   'Beerio Kart': [10, 25], // one full tournament
   'Beer Pong': [10, 20],
